@@ -3,6 +3,7 @@
 <p align="center">
   <a href="#About"><b>About</b></a> &bull;
   <a href="#Quickstart"><b>Quickstart</b></a> &bull;
+  <a href="#Documentation"><b>Documentation</b></a> &bull;
   <a href="#References"><b>References</b></a> &bull;
   <a href="#Contact"><b>Contact</b></a> &bull;
   <a href="#Acknowledgments"><b>Acknowledgments</b></a>
@@ -153,6 +154,10 @@ preprocessing.DTypeTransformer(
 
 **Note**: pandas is an optional dependency, which is not installed by default. If you are working with pandas DataFrames
 a lot, you might want to check out **[CaTabRa-pandas](https://github.com/risc-mi/catabra-pandas)**.
+
+## Documentation
+
+The [CaTabRa documentation on ReadTheDocs](https://catabra.readthedocs.io/en/latest) covers many aspects of CaTabRa-lib as well, in particular [metrics](https://catabra.readthedocs.io/en/latest/app_docs/metrics_link.html) and [plotting](https://catabra.readthedocs.io/en/latest/app_docs/plots_link.html).
 
 ## References
 
