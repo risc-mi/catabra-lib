@@ -201,33 +201,53 @@ class OneHotEncoder(skl_preprocessing.OneHotEncoder):
         return ["drop_na"] + skl_preprocessing.OneHotEncoder._get_param_names()
 
 
-class NumCatTransformer(BaseEstimator, TransformerMixin):
-    """Transform numerical and categorical columns of a pandas DataFrame separately.
+class DTypeTransformer(BaseEstimator, TransformerMixin):
+    """Transform columns of a pandas DataFrame depending on their data types.
 
-    The order of columns may change compared to the input: numerical columns come first, followed by categorical
-    columns, followed by passed-through columns.
+    The order of columns may change compared to the input.
 
     Parameters
     ----------
-    num_transformer : str | callable, optional
-        The transformer to apply to numerical columns, or "passthrough" or "drop". Must implement `fit()` and
-        `transform()`. Class instances are cloned before being fit to data, to ensure that the given instances are left
-        unchanged.
-    cat_transformer : str | callable, optional
-        The transformer to apply to categorical columns, or "passthrough" or "drop". Must implement `fit()` and
-        `transform()`. Class instances are cloned before being fit to data, to ensure that the given instances are left
-        unchanged.
-    bool : str, default="passthrough"
-        How to treat boolean columns. One of "num", "cat", "passthrough" or "drop".
-    obj : str, default="drop"
-        How to treat columns with object data type. One of "num", "cat", "passthrough" or "drop".
-    timedelta : str, default="num"
-        How to treat timedelta columns. One of "num", "cat", "passthrough", "drop", "[ns]", "[us]", "[ms]", "[s]",
-        "[m]", "[h]", "[d]", "[w]" or "[y]". A string representing a temporal resolution means that timedelta columns
-        are first converted into floats by dividing by the given resolution, and then treating the result as numeric.
-        This is useful if `num_transformer` does not natively support timedelta values.
-    timestamp : str, default="num"
-        How to treat timestamp/datetime columns. Same possibilities as for `timedelta`.
+    num : str | BaseEstimator, optional
+        The transformation to apply to numerical columns, or "passthrough", "drop", "num", "cat", "bool", "timedelta",
+        "datetime", "obj" or None/"default":
+        * BaseEstimator: Apply the BaseEstimator to all columns with numerical data type. The BaseEstimator must
+            implement `fit()` and `transform()`. Class instances are cloned before being fit to data, to ensure that
+            the given instances are left unchanged.
+        * "passthrough": Pass numerical columns through unchanged.
+        * "drop": Drop numerical columns.
+        * "num": Prohibited here, but allowed with `cat`, `bool`, `timedelta`, `datetime`, `obj` and `default`: Treat
+            columns of the respective data type as numerical and apply the transformation specified by `num`.
+        * "cat": Treat numerical columns like categorical columns, and apply the transformation specified by `cat`.
+        * "bool": Treat numerical columns like boolean columns, and apply the transformation specified by `bool`.
+        * "timedelta": Treat numerical columns like timedelta columns, and apply the transformation specified by
+            `timedelta`.
+        * "datetime": Treat numerical columns like datetime columns, and apply the transformation specified by
+            `datetime`.
+        * "obj": Treat numerical columns like columns with object data type, and apply the transformation specified by
+            `obj`.
+        * None or "default": Apply the default transformation, specified by `default`.
+        
+    cat : str | BaseEstimator, optional
+        The transformation to apply to categorical columns. Same options as for `num`.
+    bool : str | BaseEstimator, optional
+        The transformation to apply to boolean columns. Same options as for `num`.
+    timedelta : str | BaseEstimator, optional
+        The transformation to apply to timedelta columns. Same options as for `num`.
+    timestamp : str | BaseEstimator, optional
+        The transformation to apply to datetime columns. Same options as for `num`.
+    obj : str | BaseEstimator, optional
+        The transformation to apply to columns with object data type. Same options as for `num`.
+    default : str | BaseEstimator, default="passthrough"
+        Default behavior for columns with unspecified transformation. Same options as for `num`, but cannot be None.
+    timedelta_resolution : str | pandas.Timedelta, optional
+        Convert timedelta columns to float by diving through the given temporal resolution. This transformation is
+        applied before any other transformation, and regardless of the value of `timedelta`.
+        None keeps the data type of timedelta columns.
+    datetime_resolution : str | pandas.Timedelta, optional
+        Convert datetime columns to float by diving through the given temporal resolution. This transformation is
+        applied before any other transformation, and regardless of the value of `datetime`.
+        None keeps the data type of timedelta columns.
 
     See Also
     --------
@@ -236,153 +256,180 @@ class NumCatTransformer(BaseEstimator, TransformerMixin):
     Notes
     -----
     This preprocessing transformation is only applicable to pandas DataFrames.
+
+    If the transformation specification is recursive, `fit()` raises a ValueError. Recursive specifications arise
+    when some data type A shall be treated like B, B shall be treated like C, C shall be treated like ... A.
     """
 
     def __init__(
         self,
-        num_transformer=None,
-        cat_transformer=None,
-        bool: str = "passthrough",
-        obj: str = "drop",
-        timedelta: str = "num",
-        timestamp: str = "num",
+        num=None,
+        cat=None,
+        bool=None,
+        timedelta=None,
+        datetime=None,
+        obj=None,
+        default="passthrough",
+        timedelta_resolution: Union[str, "pandas.Timedelta", None] = None,  # noqa F821 # type: ignore
+        datetime_resolution: Union[str, "pandas.Timedelta", None] = None,  # noqa F821 # type: ignore
     ):
         try:
             import pandas as pd
         except ImportError:
-            raise ValueError("Class NumCatTransformer can only be instantiated if pandas is installed.")
+            raise ValueError("Class DTypeTransformer can only be instantiated if pandas is installed.")
 
         self._pd = pd
-        self.num_transformer = num_transformer or "passthrough"
-        self.cat_transformer = cat_transformer or "passthrough"
+        self.num = num
+        self.cat = cat
         self.bool = bool
         self.obj = obj
-        self._timedelta = timedelta
-        self._timestamp = timestamp
-        self._timedelta_resolution = self._get_resolution(self._timedelta)
-        self._timestamp_resolution = self._get_resolution(self._timestamp)
-
-    @property
-    def timedelta(self) -> str:
-        return self._timedelta
-
-    @property
-    def timestamp(self) -> str:
-        return self._timestamp
+        self.timedelta = timedelta
+        self.datetime = datetime
+        self.default = default
+        self.timedelta_resolution = timedelta_resolution
+        self.datetime_resolution = datetime_resolution
 
     @property
     def timedelta_resolution(self) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
         return self._timedelta_resolution
+    
+    @timedelta_resolution.setter
+    def timedelta_resolution(self, value: Union[str, "pandas.Timedelta", None]):    # noqa F821 # type: ignore
+        self._timedelta_resolution = self._get_resolution(value)
 
     @property
-    def timestamp_resolution(self) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
-        return self._timestamp_resolution
+    def datetime_resolution(self) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
+        return self._datetime_resolution
+    
+    @datetime_resolution.setter
+    def datetime_resolution(self, value: Union[str, "pandas.Timedelta", None]): # noqa F821 # type: ignore
+        self._datetime_resolution = self._get_resolution(value)
 
-    def fit(self, X: "pandas.DataFrame", y=None) -> "NumCatTransformer":  # noqa F821 # type: ignore
-        _ensure_dataframe(X, "NumCatTransformer.fit")
+    def fit(self, X: "pandas.DataFrame", y=None) -> "DTypeTransformer":  # noqa F821 # type: ignore
+        _ensure_dataframe(X, "DTypeTransformer.fit")
 
-        self.num_cols_: list = []
-        self.cat_cols_: list = []
-        self.passthrough_cols_: list = []
-
-        def _add_to_list(_c, _spec: str, _allow_temporal: bool):
-            if _spec == "num":
-                self.num_cols_.append(_c)
-            elif _spec == "cat":
-                self.cat_cols_.append(_c)
-            elif _spec == "passthrough":
-                self.passthrough_cols_.append(_c)
-            elif _allow_temporal and _spec in (
-                "[ns]",
-                "[us]",
-                "[ms]",
-                "[s]",
-                "[m]",
-                "[h]",
-                "[d]",
-                "[w]",
-                "[y]",
-            ):
-                self.num_cols_.append(_c)
-
+        transformers = {}  # maps names to pairs `(transformer: Optional[BaseEstimator], columns: list)`
         for c in X.columns:
             if X[c].dtype.name == "category":
-                self.cat_cols_.append(c)
+                name = "cat"
             elif X[c].dtype.kind == "b":
-                _add_to_list(c, self.bool, False)
+                name = "bool"
             elif X[c].dtype.kind == "O":
-                _add_to_list(c, self.obj, False)
+                name = "obj"
             elif X[c].dtype.kind == "M":
-                _add_to_list(c, self._timestamp, True)
+                name = "datetime"
             elif X[c].dtype.kind == "m":
-                _add_to_list(c, self._timedelta, True)
+                name = "timedelta"
             elif X[c].dtype.kind in "uif":
-                self.num_cols_.append(c)
+                name = "num"
+            else:
+                name = "default"
+            trans, name = self.get_transformer(name)
 
-        if self.cat_cols_ and not isinstance(self.cat_transformer, str):
-            self.cat_transformer_ = (
-                self.cat_transformer() if type(self.cat_transformer) is type else clone(self.cat_transformer)
-            )
-            self.cat_transformer_.fit(X[self.cat_cols_])
-        else:
-            self.cat_transformer_ = None
-            if self.cat_cols_ and self.cat_transformer == "passthrough":
-                self.passthrough_cols_ = self.cat_cols_ + self.passthrough_cols_
-                self.cat_cols_ = []
+            if trans == "drop":
+                continue
+            elif trans == "passthrough":
+                trans = None
+            try:
+                _, cols = transformers[name]
+                cols.append(c)
+            except KeyError:
+                transformers[name] = (trans, [c])
 
-        if self.num_cols_ and not isinstance(self.num_transformer, str):
-            self.num_transformer_ = (
-                self.num_transformer() if type(self.num_transformer) is type else clone(self.num_transformer)
+        X, _ = self._convert_temporal(X)
+
+        # convert to list of triples for consistency with ColumnTransformer
+        self.transformers_ = [
+            (
+                name,
+                trans if trans is None else (trans() if type(trans) is type else clone(trans)).fit(X[cols]),
+                cols,
             )
-            X_num, _ = self._prepare_num(X[self.num_cols_])
-            self.num_transformer_.fit(X_num)
-        else:
-            self.num_transformer_ = None
-            if self.num_cols_ and self.num_transformer == "passthrough":
-                self.passthrough_cols_ = self.num_cols_ + self.passthrough_cols_
-                self.num_cols_ = []
+            for name, (trans, cols) in transformers.items()
+        ]
 
         return self
 
     def transform(self, X: "pandas.DataFrame") -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
-        _ensure_dataframe(X, "NumCatTransformer.transform")
+        _ensure_dataframe(X, "DTypeTransformer.transform")
 
         check_is_fitted(self)
         self._validate_input(X)
 
-        if self.num_transformer_ is not None:
-            X_num, _ = self._prepare_num(X[self.num_cols_])
-            num = self.num_transformer_.transform(X_num)
-            num, num_df = self._postproc_num(num, X.index)
-        else:
-            num = num_df = None
+        X, _ = self._convert_temporal(X)
 
-        if self.cat_transformer_ is not None:
-            cat = self.cat_transformer_.transform(X[self.cat_cols_])
-            cat, cat_df = self._postproc_cat(cat, X.index)
+        out = []
+        all_df = True
+        for _, trans, cols in self.transformers_:
+            if trans is None:
+                # passthrough
+                X_trans = X[cols]
+            else:
+                X_trans = trans.transform(X[cols])
+                X_trans, X_trans_df = self._postproc(X_trans, trans, cols, X.index)
+                if X_trans_df is not None:
+                    X_trans = X_trans_df
+            all_df = all_df and isinstance(X_trans, self._pd.DataFrame)
+            out.append(X_trans)
+        
+        if all_df:
+            # return DataFrame
+            return self._pd.concat(out, axis=1, sort=False)
         else:
-            cat = cat_df = None
-
-        return self._combine_results(num, num_df, cat, cat_df, X[self.passthrough_cols_])
+            # return array
+            arrs = [X_trans.values if isinstance(X_trans, self._pd.DataFrame) else X_trans for X_trans in out]
+            return np.hstack(arrs)
 
     def set_output(self, *args, **kwargs):
-        # like `ColumnTransformer`, we set the output of both `num_transformer` and `num_transformer_`
-        for t in (
-            self.num_transformer,
-            self.cat_transformer,
-            getattr(self, "num_transformer_", None),
-            getattr(self, "cat_transformer_", None),
-        ):
+        # like ColumnTransformer, we set the output of both fitted and unfitted transformers
+        for t in [
+            self.num,
+            self.cat,
+            self.bool,
+            self.timedelta,
+            self.datetime,
+            self.obj,
+            self.default,
+        ] + [t for _, t, _ in getattr(self, "transformers_", [])]:
             if type(t) is not type and t is not None and not isinstance(t, str):
                 t.set_output(*args, **kwargs)
         return self
 
     def _validate_input(self, df):
-        diff = [c for c in self.num_cols_ + self.cat_cols_ + self.passthrough_cols_ if c not in df.columns]
+        diff = [c for _, _, cols in self.transformers_ for c in cols if c not in df.columns]
         if diff:
             raise ValueError("X lacks columns " + str(diff))
 
-    def _prepare_num(self, df) -> Tuple["pandas.DataFrame", bool]:  # noqa F821 # type: ignore
+    def get_transformer(self, name: str):
+        visited = [name]
+        spec = getattr(self, name)
+        while True:
+            if spec is None:
+                spec = "default"
+
+            if isinstance(spec, str):
+                if spec in ("drop", "passthrough"):
+                    return (spec, name)
+
+                name = spec
+                try:
+                    spec = getattr(self, spec)
+                except AttributeError:
+                    raise ValueError(
+                        'Transformation must be BaseEstimator, None, "default", "num", "cat", "bool",'
+                        ' "timedelta", "datetime", "obj", "passthrough" or "drop", but got "{}"'.format(name)
+                    )
+
+                try:
+                    i = visited.index(name)
+                except ValueError:
+                    visited.append(name)
+                else:
+                    raise ValueError("Recursive transformation specification: " + " -> ".join(visited[i:] + [name]))
+            else:
+                return (spec, name)
+
+    def _convert_temporal(self, df) -> Tuple["pandas.DataFrame", bool]:  # noqa F821 # type: ignore
         copied = False
         if self._timedelta_resolution is not None:
             for c in df.columns:
@@ -391,118 +438,76 @@ class NumCatTransformer(BaseEstimator, TransformerMixin):
                         df = df.copy()
                         copied = True
                     df[c] = df[c] / self._timedelta_resolution
-        if self._timestamp_resolution is not None:
+        if self._datetime_resolution is not None:
             for c in df.columns:
                 if df[c].dtype.kind == "M":
                     if not copied:
                         df = df.copy()
                         copied = True
-                    df[c] = (df[c] - self._pd.Timestamp(0)) / self._timestamp_resolution
+                    df[c] = (df[c] - self._pd.Timestamp(0)) / self._datetime_resolution
 
         return df, copied
 
-    def _postproc_num(self, num, index: "pandas.Index"):  # noqa F821 # type: ignore
-        num_df = None
-        if hasattr(num, "toarray"):
-            num = num.toarray()
-        if isinstance(num, self._pd.DataFrame):
-            assert (num.index == index).all()
-            num_df = num
-        elif num.shape[1] == len(self.num_cols_):
-            num_df = self._pd.DataFrame(index=index, columns=self.num_cols_, data=num)
-        elif isinstance(self.num_transformer_, skl_preprocessing.KBinsDiscretizer):
-            if (
-                self.num_transformer_.encode in ("onehot", "onehot-dense")
-                and self.num_transformer_.n_bins_.sum() == num.shape[1]
-                and len(self.num_transformer_.n_bins_) == len(self.num_cols_)
-            ):
-                num_df = self._pd.DataFrame(
-                    index=index,
-                    columns=[
-                        f"{col}_{b}" for col, n in zip(self.num_cols_, self.num_transformer_.n_bins_) for b in range(n)
-                    ],
-                    data=num,
-                )
-        return num, num_df
-
-    def _postproc_cat(self, cat, index: "pandas.Index"):  # noqa F821 # type: ignore
-        cat_df = None
-        if hasattr(cat, "toarray"):
-            cat = cat.toarray()
-        if isinstance(cat, self._pd.DataFrame):
-            assert (cat.index == index).all()
-            cat_df = cat
-        elif isinstance(self.cat_transformer_, skl_preprocessing.OneHotEncoder):
-            if self.cat_transformer_.drop_idx_ is not None:
-                features_out = []
-                for i, categories in enumerate(self.cat_transformer_.categories_):
-                    j = self.cat_transformer_.drop_idx_[i]
-                    if j is None:
-                        features_out.append(categories)
-                    elif j == 0:
-                        features_out.append(categories[1:])
-                    elif j + 1 == len(categories):
-                        features_out.append(categories[:-1])
-                    else:
-                        features_out.append(np.concatenate([categories[:j], categories[j + 1 :]]))
-            else:
-                features_out = self.cat_transformer_.categories_
-            if len(self.cat_cols_) == len(features_out) and cat.shape[1] == sum(len(f) for f in features_out):
-                cat_df = self._pd.DataFrame(
-                    index=index,
-                    columns=[f"{col}_{f}" for col, feats in zip(self.cat_cols_, features_out) for f in feats],
-                    data=cat.toarray() if hasattr(cat, "toarray") else cat,
-                )
-        elif cat.shape[1] == len(self.cat_cols_):
-            cat_df = self._pd.DataFrame(index=index, columns=self.cat_cols_, data=cat)
-        return cat, cat_df
-
-    def _combine_results(self, num, num_df, cat, cat_df, passthrough_df):
-        if (num is not None and num_df is None) or (cat is not None and cat_df is None):
-            # return array
-            arrs = []
-            if num is not None:
-                arrs.append(num)
-            elif num_df is not None:
-                arrs.append(num_df.values)
-            if cat is not None:
-                arrs.append(cat)
-            elif cat_df is not None:
-                arrs.append(cat_df.values)
-            if not passthrough_df.empty:
-                arrs.append(passthrough_df.values)
-            return np.hstack(arrs)
+    def _postproc(self, X, trans, cols: list, index: "pandas.Index"):  # noqa F821 # type: ignore
+        df = None
+        if hasattr(X, "toarray"):
+            X = X.toarray()
+        if isinstance(X, self._pd.DataFrame):
+            assert (X.index == index).all()
+            df = X
         else:
-            # return DataFrame
-            dfs = []
-            if num_df is not None:
-                dfs.append(num_df)
-            if cat_df is not None:
-                dfs.append(cat_df)
-            if not passthrough_df.empty:
-                dfs.append(passthrough_df)
-            return self._pd.concat(dfs, axis=1, sort=False)
+            if isinstance(trans, skl_preprocessing.KBinsDiscretizer):
+                if (
+                    trans.encode in ("onehot", "onehot-dense")
+                    and self.num_transformer_.n_bins_.sum() == X.shape[1]
+                    and len(trans.n_bins_) == len(cols)
+                ):
+                    columns = [f"{col}_{b}" for col, n in zip(cols, trans.n_bins_) for b in range(n)]
+                else:
+                    columns = []
+            elif isinstance(trans, skl_preprocessing.OneHotEncoder):
+                if trans.drop_idx_ is None:
+                    features_out = trans.categories_
+                else:
+                    features_out = []
+                    for i, categories in enumerate(trans.categories_):
+                        j = trans.drop_idx_[i]
+                        if j is None:
+                            features_out.append(categories)
+                        elif j == 0:
+                            features_out.append(categories[1:])
+                        elif j + 1 == len(categories):
+                            features_out.append(categories[:-1])
+                        else:
+                            features_out.append(np.concatenate([categories[:j], categories[j + 1 :]]))
+                if len(cols) == len(features_out) and X.shape[1] == sum(len(f) for f in features_out):
+                    columns = [f"{col}_{f}" for col, feats in zip(cols, features_out) for f in feats]
+                else:
+                    columns = []
+            else:
+                columns = cols
 
-    def _get_resolution(self, spec: str) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
-        if spec == "[ns]":
-            return self._pd.Timedelta(1, unit="ns")
-        elif spec == "[us]":
-            return self._pd.Timedelta(1, unit="us")
-        elif spec == "[ms]":
-            return self._pd.Timedelta(1, unit="ms")
-        elif spec == "[s]":
-            return self._pd.Timedelta(1, unit="s")
-        elif spec == "[m]":
-            return self._pd.Timedelta(1, unit="m")
-        elif spec == "[h]":
-            return self._pd.Timedelta(1, unit="h")
-        elif spec == "[d]":
-            return self._pd.Timedelta(1, unit="d")
-        elif spec == "[w]":
-            return self._pd.Timedelta(7, unit="d")
-        elif spec == "[y]":
-            return self._pd.Timedelta(365.2525, unit="d")
-        return None
+            if len(columns) == X.shape[1]:
+                df = self._pd.DataFrame(index=index, columns=columns, data=X)
+
+        return X, df
+
+    def _get_resolution(self, spec) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
+        if isinstance(spec, str):
+            if spec in ("ns", "us", "ms", "s", "m", "h", "d", "w"):
+                return self._pd.Timedelta(1, unit=spec)
+            elif spec in ("y", "Y"):
+                return self._pd.Timedelta(365.2525, unit="d")
+            elif len(spec) > 1 and spec[-1] in ("y", "Y"):
+                try:
+                    y = float(spec[:-1])
+                except ValueError:
+                    return self._pd.to_timedelta(spec)
+                else:
+                    return self._pd.Timedelta(y * 365.2525, unit="d")
+            else:
+                return self._pd.to_timedelta(spec)
+        return spec
 
 
 class FeatureFilter(BaseEstimator, TransformerMixin):
@@ -558,59 +563,34 @@ class FeatureFilter(BaseEstimator, TransformerMixin):
 # convenience functions
 
 
-def ordinal_encoder(
-    dtype=np.float64,
-    num: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "num",
-    timestamp: str = "num",
-) -> NumCatTransformer:
+def ordinal_encoder(dtype=np.float64, **kwargs) -> DTypeTransformer:
     """Create a transformation for ordinal-encoding categorical features, while keeping other features unchanged.
 
     Parameters
     ----------
     dtype
         Data type of ordinal encoding. Passed to `sklearn.preprocessing.OrdinalEncoder`.
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `num`, `bool` etc. for specifying how to treat
+        non-categorical columns. `cat` cannot be specified.
 
     Returns
     -------
-    NumCatTransformer instance that can be used for ordinal-encoding categorical columns in pandas DataFrames.
+    DTypeTransformer instance that can be used for ordinal-encoding categorical columns in pandas DataFrames.
 
     See Also
     --------
     ordinal_encode
     sklearn.preprocessing.OrdinalEncoder
     """
-    return NumCatTransformer(
-        num_transformer=num,
-        cat_transformer=skl_preprocessing.OrdinalEncoder(dtype=dtype),
-        bool=bool,
-        obj=obj,
-        timedelta=timedelta,
-        timestamp=timestamp,
-    )
+    return DTypeTransformer(cat=skl_preprocessing.OrdinalEncoder(dtype=dtype), **kwargs)
 
 
 def ordinal_encode(
     X: "pandas.DataFrame",  # noqa F821 # type: ignore
     dtype=np.float64,
-    num: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "num",
-    timestamp: str = "num",
     output: str = "default",
+    **kwargs,
 ) -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
     """Ordinal-encode categorical features in a pandas DataFrame, while keeping other features unchanged.
 
@@ -623,18 +603,11 @@ def ordinal_encode(
         DataFrame to process.
     dtype
         Data type of ordinal encoding. Passed to `sklearn.preprocessing.OrdinalEncoder`.
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
     output : str, default="default"
         Desired output type, either "default" (Numpy array) or "pandas" (pandas DataFrame).
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `num`, `bool` etc. for specifying how to treat
+        non-categorical columns. `cat` cannot be specified.
 
     Returns
     -------
@@ -645,22 +618,14 @@ def ordinal_encode(
     ordinal_encoder
     sklearn.preprocessing.OrdinalEncoder
     """
-    transformer = ordinal_encoder(dtype=dtype, num=num, bool=bool, obj=obj, timedelta=timedelta, timestamp=timestamp)
+    transformer = ordinal_encoder(dtype=dtype, **kwargs)
     _try_set_output(transformer, output)
     return transformer.fit_transform(X)
 
 
 def one_hot_encoder(
-    drop_na: bool = False,
-    drop=None,
-    dtype=np.float64,
-    handle_unknown: Optional[str] = None,
-    num: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "num",
-    timestamp: str = "num",
-) -> NumCatTransformer:
+    drop_na: bool = False, drop=None, dtype=np.float64, handle_unknown: Optional[str] = None, **kwargs
+) -> DTypeTransformer:
     """Create a transformation for one-hot-encoding categorical features, while keeping other features unchanged.
 
     Parameters
@@ -673,20 +638,13 @@ def one_hot_encoder(
         Data type of one-hot encoding. Passed to `OneHotEncoder`.
     handle_unknown : str, optional
         How to handle unknown categories. Passed to `OneHotEncoder`.
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `num`, `bool` etc. for specifying how to treat
+        non-categorical columns. `cat` cannot be specified.
 
     Returns
     -------
-    NumCatTransformer instance that can be used for one-hot-encoding categorical columns in pandas DataFrames.
+    DTypeTransformer instance that can be used for one-hot-encoding categorical columns in pandas DataFrames.
 
     See Also
     --------
@@ -699,23 +657,13 @@ def one_hot_encoder(
     """
     if _SKL_MAJOR < 1 or (_SKL_MAJOR == 1 and _SKL_MINOR < 2):
         # <1.2
-        kwargs = dict(sparse=False)
+        ohe_kwargs = dict(sparse=False)
     else:
         # >=1.2
-        kwargs = dict(sparse_output=False)
-    return NumCatTransformer(
-        num_transformer=num,
-        cat_transformer=OneHotEncoder(
-            drop_na=drop_na,
-            drop=drop,
-            dtype=dtype,
-            handle_unknown=handle_unknown,
-            **kwargs,
-        ),
-        bool=bool,
-        obj=obj,
-        timedelta=timedelta,
-        timestamp=timestamp,
+        ohe_kwargs = dict(sparse_output=False)
+    return DTypeTransformer(
+        cat=OneHotEncoder(drop_na=drop_na, drop=drop, dtype=dtype, handle_unknown=handle_unknown, **ohe_kwargs),
+        **kwargs,
     )
 
 
@@ -725,12 +673,8 @@ def one_hot_encode(
     drop=None,
     dtype=np.float64,
     handle_unknown: Optional[str] = None,
-    num: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
     output: str = "default",
-    timedelta: str = "num",
-    timestamp: str = "num",
+    **kwargs,
 ) -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
     """One-hot encode categorical features in a pandas DataFrame, while keeping other features unchanged.
 
@@ -747,18 +691,11 @@ def one_hot_encode(
         Categories to drop. If `drop_na` is True, this parameter must be None. Passed to `OneHotEncoder`.
     dtype
         Data type of one-hot encoding. Passed to `OneHotEncoder`.
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
     output : str, default="default"
         Desired output type, either "default" (Numpy array) or "pandas" (pandas DataFrame).
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `num`, `bool` etc. for specifying how to treat
+        non-categorical columns. `cat` cannot be specified.
 
     Returns
     -------
@@ -769,17 +706,7 @@ def one_hot_encode(
     one_hot_encoder
     OneHotEncoder
     """
-    transformer = one_hot_encoder(
-        drop_na=drop_na,
-        drop=drop,
-        dtype=dtype,
-        handle_unknown=handle_unknown,
-        num=num,
-        bool=bool,
-        obj=obj,
-        timedelta=timedelta,
-        timestamp=timestamp,
-    )
+    transformer = one_hot_encoder(drop_na=drop_na, drop=drop, dtype=dtype, handle_unknown=handle_unknown, **kwargs)
     _try_set_output(transformer, output)
     return transformer.fit_transform(X)
 
@@ -788,12 +715,9 @@ def k_bins_discretizer(
     n_bins: int = 5,
     encode: str = "onehot",
     strategy: str = "quantile",
-    cat: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
     timedelta: str = "num",
-    timestamp: str = "passthrough",
-) -> NumCatTransformer:
+    **kwargs,
+) -> DTypeTransformer:
     """Create a transformation for k-bins-discretizing numerical features, while keeping other features unchanged.
 
     Parameters
@@ -804,33 +728,25 @@ def k_bins_discretizer(
         Method used to encode the transformed result. Passed to `sklearn.preprocessing.KBinsDiscretizer`.
     strategy : str, default="quantile"
         Strategy used to define the widths of the bins. Passed to `sklearn.preprocessing.KBinsDiscretizer`.
-    cat : str, default="passthrough"
-        How to handle categorical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
     timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
+        How to treat timedelta features.
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `cat`, `bool` etc. for specifying how to treat
+        non-numerical columns. `num` cannot be specified.
 
     Returns
     -------
-    NumCatTransformer instance that can be used for k-bins-discretizing numerical columns in pandas DataFrames.
+    DTypeTransformer instance that can be used for k-bins-discretizing numerical columns in pandas DataFrames.
 
     See Also
     --------
     k_bins_discretize
     sklearn.preprocessing.KBinsDiscretizer
     """
-    return NumCatTransformer(
-        num_transformer=skl_preprocessing.KBinsDiscretizer(n_bins=n_bins, encode=encode, strategy=strategy),
-        cat_transformer=cat,
-        bool=bool,
-        obj=obj,
+    return DTypeTransformer(
+        num=skl_preprocessing.KBinsDiscretizer(n_bins=n_bins, encode=encode, strategy=strategy),
         timedelta=timedelta,
-        timestamp=timestamp,
+        **kwargs,
     )
 
 
@@ -839,12 +755,9 @@ def k_bins_discretize(
     n_bins: int = 5,
     encode: str = "onehot",
     strategy: str = "quantile",
-    cat: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "num",
-    timestamp: str = "passthrough",
     output: str = "default",
+    timedelta: str = "num",
+    **kwargs,
 ) -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
     """K-bins discretize numerical features in a pandas DataFrame, while keeping other features unchanged.
 
@@ -861,18 +774,13 @@ def k_bins_discretize(
         Method used to encode the transformed result. Passed to `sklearn.preprocessing.KBinsDiscretizer`.
     strategy : str, default="quantile"
         Strategy used to define the widths of the bins. Passed to `sklearn.preprocessing.KBinsDiscretizer`.
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
     output : str, default="default"
         Desired output type, either "default" (Numpy array) or "pandas" (pandas DataFrame).
+    timedelta : str, default="num"
+        How to handle timedelta features.
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `cat`, `bool` etc. for specifying how to treat
+        non-numerical columns. `num` cannot be specified.
 
     Returns
     -------
@@ -885,28 +793,12 @@ def k_bins_discretize(
     """
     if output == "pandas" and encode == "onehot":
         encode = "onehot-dense"
-    transformer = k_bins_discretizer(
-        n_bins=n_bins,
-        encode=encode,
-        strategy=strategy,
-        cat=cat,
-        bool=bool,
-        obj=obj,
-        timedelta=timedelta,
-        timestamp=timestamp,
-    )
+    transformer = k_bins_discretizer(n_bins=n_bins, encode=encode, strategy=strategy, timedelta=timedelta, **kwargs)
     _try_set_output(transformer, output)
     return transformer.fit_transform(X)
 
 
-def binarizer(
-    threshold: float = 0,
-    cat: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "passthrough",
-    timestamp: str = "passthrough",
-) -> NumCatTransformer:
+def binarizer(threshold: float = 0, **kwargs) -> DTypeTransformer:
     """Create a transformation for binarizing numerical features, while keeping other features unchanged.
 
     Parameters
@@ -914,45 +806,24 @@ def binarizer(
     threshold : float, default=0
         Feature values below or equal to this are replaced by 0, above it by 1.
         Passed to `sklearn.preprocessing.Binarizer`.
-    cat : str, default="passthrough"
-        How to handle categorical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `cat`, `bool` etc. for specifying how to treat
+        non-numerical columns. `num` cannot be specified.
 
     Returns
     -------
-    NumCatTransformer instance that can be used for binarizing numerical columns in pandas DataFrames.
+    DTypeTransformer instance that can be used for binarizing numerical columns in pandas DataFrames.
 
     See Also
     --------
     binarize
     sklearn.preprocessing.Binarizer
     """
-    return NumCatTransformer(
-        num_transformer=skl_preprocessing.Binarizer(threshold=threshold),
-        cat_transformer=cat,
-        bool=bool,
-        obj=obj,
-        timedelta=timedelta,
-        timestamp=timestamp,
-    )
+    return DTypeTransformer(num=skl_preprocessing.Binarizer(threshold=threshold), **kwargs)
 
 
 def binarize(
-    X: "pandas.DataFrame",  # noqa F821 # type: ignore
-    threshold: float = 0,
-    cat: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "passthrough",
-    timestamp: str = "passthrough",
-    output: str = "default",
+    X: "pandas.DataFrame", threshold: float = 0, output: str = "default", **kwargs  # noqa F821 # type: ignore
 ) -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
     """Binarize numerical features in a pandas DataFrame, while keeping other features unchanged.
 
@@ -966,18 +837,11 @@ def binarize(
     threshold : float, default=0
         Feature values below or equal to this are replaced by 0, above it by 1.
         Passed to `sklearn.preprocessing.Binarizer`.
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
     output : str, default="default"
         Desired output type, either "default" (Numpy array) or "pandas" (pandas DataFrame).
+    **kwargs
+        Keyword arguments passed to DTypeTransformer, most notably `cat`, `bool` etc. for specifying how to treat
+        non-numerical columns. `num` cannot be specified.
 
     Returns
     -------
@@ -988,21 +852,24 @@ def binarize(
     binarizer
     sklearn.preprocessing.Binarizer
     """
-    transformer = binarizer(threshold=threshold, cat=cat, bool=bool, obj=obj, timedelta=timedelta, timestamp=timestamp)
+    transformer = binarizer(threshold=threshold, **kwargs)
     _try_set_output(transformer, output)
     return transformer.fit_transform(X)
 
 
 def scaler(
     strategy: str = "standard",
-    cat: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "num",
-    timestamp: str = "passthrough",
+    cat=None,
+    bool=None,
+    timedelta="num",
+    datetime=None,
+    obj=None,
+    default="passthrough",
+    timedelta_resolution=None,
+    datetime_resolution=None,
     fit_bool=None,
     **kwargs,
-) -> NumCatTransformer:
+) -> DTypeTransformer:
     """Create a transformation for scaling numerical features, while keeping other features unchanged.
 
     Parameters
@@ -1014,22 +881,30 @@ def scaler(
         * "minmax": Scale data to have zero minimum and unit maximum, using `sklearn.preprocessing.MinMaxScaler`.
         * "maxabs": Scale data to have a maximum absolute value of 1, using `sklearn.preprocessing.MaxAbsScaler`.
 
-    cat : str, default="passthrough"
+    cat : optional
         How to handle categorical features.
-    bool : str, default="passthrough"
+    bool : optional
         How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
+    timedelta : default="num"
         How to handle timedelta features.
-    timestamp : str, default="num"
+    datetime : optional
         How to handle datetime features.
+    obj : optional
+        How to handle object features.
+    default : default="passthrough"
+        How to handle features for which no transformation is specified elsewhere.
+    timedelta_resolution : str | pandas.Timedelta, optional
+        Timedelta resolution. If None and `timedelta` is set to "num" (either explicitly or implicitly), the resolution
+        is automatically set to "s".
+    datetime_resolution : str | pandas.Timedelta, optional
+        Datetime resolution. If None and `datetime` is set to "num" (either explicitly or implicitly), the resolution
+        is automatically set to "s".
     **kwargs
         Additional keyword arguments passed to the underlying scikit-learn scaler.
 
     Returns
     -------
-    NumCatTransformer instance that can be used for scaling numerical columns in pandas DataFrames.
+    DTypeTransformer instance that can be used for scaling numerical columns in pandas DataFrames.
 
     See Also
     --------
@@ -1054,31 +929,31 @@ def scaler(
         num_transformer = skl_preprocessing.MaxAbsScaler(**kwargs)
     else:
         raise ValueError(
-            'Scaling strategy must be one of "standard", "robust", "minmax" or "maxabs", but got "{}".'.format(strategy)
+            'Scaling strategy must be one of "standard", "robust", "minmax" or "maxabs", but got "{}"'.format(strategy)
         )
-    if timedelta == "num":
-        # we have to pass some resolution, but it does not matter which
-        timedelta = "[s]"
-    if timestamp == "num":
-        timestamp = "[s]"
-    return NumCatTransformer(
-        num_transformer=num_transformer,
-        cat_transformer=cat,
+    trans = DTypeTransformer(
+        num=num_transformer,
+        cat=cat,
         bool=bool,
-        obj=obj,
         timedelta=timedelta,
-        timestamp=timestamp,
+        datetime=datetime,
+        obj=obj,
+        default=default,
+        timedelta_resolution=timedelta_resolution,
+        datetime_resolution=datetime_resolution,
     )
+    if timedelta_resolution is None and trans.get_transformer("timedelta")[1] == "num":
+        # we have to pass some resolution, but it does not matter which
+        trans.timedelta_resolution = "s"
+    if datetime_resolution is None and trans.get_transformer("datetime")[1] == "num":
+        # we have to pass some resolution, but it does not matter which
+        trans.datetime_resolution = "s"
+    return trans
 
 
 def scale(
     X: "pandas.DataFrame",  # noqa F821 # type: ignore
     strategy: str = "standard",
-    cat: str = "passthrough",
-    bool: str = "passthrough",
-    obj: str = "passthrough",
-    timedelta: str = "num",
-    timestamp: str = "passthrough",
     output: str = "default",
     **kwargs,
 ) -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
@@ -1098,20 +973,10 @@ def scale(
         * "minmax": Scale data to have zero minimum and unit maximum, using `sklearn.preprocessing.MinMaxScaler`.
         * "maxabs": Scale data to have a maximum absolute value of 1, using `sklearn.preprocessing.MaxAbsScaler`.
 
-    num : str, default="passthrough"
-        How to handle numerical features.
-    bool : str, default="passthrough"
-        How to handle boolean features.
-    obj : str, default="passthrough"
-        How to handle object features.
-    timedelta : str, default="num"
-        How to handle timedelta features.
-    timestamp : str, default="num"
-        How to handle datetime features.
     output : str, default="default"
         Desired output type, either "default" (Numpy array) or "pandas" (pandas DataFrame).
     **kwargs
-        Additional keyword arguments passed to the underlying scikit-learn scaler.
+        Additional keyword arguments passed to `scaler()`.
 
     Returns
     -------
@@ -1125,15 +990,7 @@ def scale(
     sklearn.preprocessing.MinMaxScaler
     sklearn.preprocessing.MaxAbsScaler
     """
-    transformer = scaler(
-        strategy=strategy,
-        cat=cat,
-        bool=bool,
-        obj=obj,
-        timedelta=timedelta,
-        timestamp=timestamp,
-        **kwargs,
-    )
+    transformer = scaler(strategy=strategy, **kwargs)
     _try_set_output(transformer, output)
     return transformer.fit_transform(X)
 

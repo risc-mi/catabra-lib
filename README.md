@@ -136,15 +136,17 @@ df
 ```
 ![DataFrame](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/df.png)
 
-Min-max-scale numerical and timedelta columns, one-hot-encode categorical and boolean columns, pass-through datetime columns, and drop all other columns:
+Min-max-scale numerical and timedelta columns, one-hot-encode categorical and boolean columns, pass datetime columns
+through, and drop all other columns:
 ```python
-preprocessing.NumCatTransformer(
-    num_transformer=preprocessing.MinMaxScaler(),
-    cat_transformer=preprocessing.OneHotEncoder(drop="if_binary"),
+preprocessing.DTypeTransformer(
+    num=preprocessing.MinMaxScaler(),
+    cat=preprocessing.OneHotEncoder(drop="if_binary"),
     bool="cat",
-    obj="drop",
-    timedelta="[h]",
-    timestamp="passthrough"
+    timedelta="num",
+    datetime="passthrough",
+    default="drop",
+    timedelta_resolution="h"
 ).fit_transform(df)
 ```
 ![Transformed DataFrame](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/df_transformed.png)

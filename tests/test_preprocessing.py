@@ -69,7 +69,7 @@ def test_ordinal_encode():
         obj="cat",
         output="pandas",
     )
-    assert (df.columns == ["A", "B", "C"]).all()
+    assert set(df.columns) == {"A", "B", "C"}
     assert (df["A"] == [0, 2, 1]).all()
     assert np.isnan(df.loc[0, "B"])
     assert (df.loc[[1, 2], "B"] == [1, 0]).all()
@@ -89,7 +89,7 @@ def test_one_hot_encode():
         drop_na=True,
         output="pandas",
     )
-    assert (df.columns == ["B_A", "B_C", "C", "A"]).all()
+    assert set(df.columns) == {"A", "B_A", "B_C", "C"}
     assert df.loc[0, "A"] == "X"
     assert df.loc[1, "A"] is None
     assert df.loc[2, "A"] == "Y"
@@ -111,10 +111,11 @@ def test_binarize():
     df = preprocessing.binarize(
         pd.DataFrame(data=dict(A=["<unknown>"] * len(b), B=b)),
         threshold=2,
-        timestamp="[h]",
+        datetime="num",
         obj="drop",
+        datetime_resolution="h",
     )
-    assert (df.columns == ["B"]).all()
+    assert set(df.columns) == {"B"}
     assert (df["B"] == (b > pd.Timestamp(2, unit="h"))).all()
 
 
@@ -124,10 +125,35 @@ def test_scale():
         pd.DataFrame(data=dict(S=pd.to_datetime(np.sin(x), unit="m"), C=pd.to_timedelta(np.cos(x), unit="d"))),
         strategy="standard",
         timedelta="num",
-        timestamp="num",
+        datetime="num",
     )
-    assert (df.columns == ["S", "C"]).all()
+    assert set(df.columns) == {"S", "C"}
     for c in ("S", "C"):
         assert df[c].dtype.kind == "f"
         assert np.abs(df[c].mean()) < 1e-5
         assert np.abs(df[c].std() - 1.0) < 1e-2
+
+
+def test_recursive():
+    df = pd.DataFrame(data=dict(A=[1, 2, 3]))
+
+    trans = preprocessing.DTypeTransformer(default=None)
+    try:
+        trans.fit(df)
+    except ValueError:
+        pass
+    else:
+        assert False
+    
+    # recursive definitions don't matter if the respective data types don't appear
+    preprocessing.DTypeTransformer(cat="cat").fit(df)
+    
+    trans = preprocessing.DTypeTransformer(
+        num="bool", bool="datetime", datetime="cat", cat="timedelta", timedelta="obj", default="num"
+    )
+    try:
+        trans.fit(df)
+    except ValueError:
+        pass
+    else:
+        assert False
