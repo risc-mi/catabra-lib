@@ -1,93 +1,187 @@
-# catabra-lib
+# CaTabRa-lib
 
+<p align="center">
+  <a href="#About"><b>About</b></a> &bull;
+  <a href="#Quickstart"><b>Quickstart</b></a> &bull;
+  <a href="#References"><b>References</b></a> &bull;
+  <a href="#Contact"><b>Contact</b></a> &bull;
+  <a href="#Acknowledgments"><b>Acknowledgments</b></a>
+</p>
 
+[![Platform Support](https://img.shields.io/badge/python->=3.6-blue)]()
+[![Platform Support](https://img.shields.io/badge/sklearn->=0.23-blue)]()
+[![Platform Support](https://img.shields.io/badge/platform-Linux%20|%20Windows%20|%20MacOS-blue)]()
 
-## Getting started
+## About
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+**CaTabRa-lib** is a Python library with a couple of useful functions implemented on top of
+[scikit-learn](https://scikit-learn.org/stable/) and other data-science libraries.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+**Highlights**:
+* Thoroughly evaluate the performance of a machine learning model using a wide range of regression and classification metrics:
+    `catabra.metrics`
+    
+    All classification metrics are applicable not only to binary, but also to multiclass and multilabel classification
+    problems through micro, macro, weighted and samples averaging. Suitable decision thresholds can be determined
+    automatically via a fixed set of thresholding strategies.
+* Obtain confidence intervals of performance metrics and other statistics using a seamlessly integrated and flexible
+    bootstrapping mechanism: `catabra_lib.bootstrapping.Bootstrap`
+* Create appealing visualizations of the most frequently used data science assets (confusion matrix, ROC/PR curve, etc.)
+    with one single command: `catabra_lib.plotting`
+    
+    Both [Matplotlib](https://matplotlib.org/stable/index.html) and interactive
+    [plotly](https://plotly.com/python/) plots are supported.
+* Preprocess data by applying smart, fully scikit-learn-compatible preprocessing transformations: `catabra_lib.preprocessing`
 
-## Add your files
+If you are interested in **CaTabRa-lib**, you might be interested in **[CaTabRa](https://github.com/risc-mi/catabra)**, too:
+**CaTabRa** is a full-fledged tabular data analysis framework that enables you to calculate statistics, generate appealing
+visualizations and train machine learning models with a single command. In fact, CaTabRa strongly depends on CaTabRa-lib.
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+## Quickstart
+
+**CaTabRa-lib** has minimal requirements (Python >= 3.6, scikit-learn >= 0.23) and can be easily installed using `pip`:
 
 ```
-cd existing_repo
-git remote add origin https://gitdma.risc-software.at/catabra/catabra-lib.git
-git branch -M main
-git push -uf origin main
+pip install catabra-lib
 ```
 
-## Integrate with your tools
+Once installed, **CaTabRa-lib** can be readily used.
 
-- [ ] [Set up project integrations](https://gitdma.risc-software.at/catabra/catabra-lib/-/settings/integrations)
+### Use-Case: Compute Detailed Classification Metrics
 
-## Collaborate with your team
+```python
+import numpy as np
+from catabra_lib import metrics
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+y_true = np.array([0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0] * 10)
+y_score = np.array([0.1, 0.6, 0.8, 0.7, 0.9, 0.5, 0.4, 0.4, 0.5, 0.0, 0.2, 0.3] * 10)
+```
 
-## Test and Deploy
+Get plain ROC-AUC:
+```python
+metrics.roc_auc(y_true, y_score)
+```
+`0.7571428571428571`
 
-Use the built-in continuous integration in GitLab.
+Employ bootstrapping to compute the 95% confidence interval:
+```python
+metrics.bootstrapped(metrics.roc_auc, agg="ci.95")(y_true, y_score)
+```
+`[0.6701300085251491, 0.8390148790494458]`
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+Get sensitivity (= recall) at the (0,1) threshold:
+```python
+metrics.thresholded(metrics.sensitivity, threshold="zero_one")(y_true, y_score)
+```
+`0.8`
 
-***
+Compute the 95% CI again, using 100 boostrapping repetitions.
+Construct the desired metric using fancy syntax:
+```python
+metrics.get("sensitivity @ zero_one (ci.95:100)")(y_true, y_score)
+```
+`[0.7189903846153847, 0.9543269230769222]`
 
-# Editing this README
+### Use-Case: Plot Confusion Matrix and ROC-Curve
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```python
+import numpy as np
+from catabra_lib import metrics
+from catabra_lib.plotting import mpl_backend    # Matplotlib backend
 
-## Suggestions for a good README
+y_true = np.array([0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0] * 10)
+y_score = np.array([0.1, 0.6, 0.8, 0.7, 0.9, 0.5, 0.4, 0.4, 0.5, 0.0, 0.2, 0.3] * 10)
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+Plot the confusion matrix at the `0.5` decision threshold:
+```python
+mpl_backend.confusion_matrix(
+    metrics.thresholded(metrics.confusion_matrix, 0.5)(y_true, y_score),
+    class_names=["negative", "positive"]
+)
+```
+![Confusion matrix](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/confusion_matrix_simple.png)
 
-## Name
-Choose a self-explaining name for your project.
+Plot the ROC curve:
+```python
+mpl_backend.roc_pr_curve(y_true, y_score, from_predictions=True, roc=True)
+```
+![ROC curve](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/roc_curve_simple.png)
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+... and also the precision-recall curve:
+```python
+mpl_backend.roc_pr_curve(y_true, y_score, from_predictions=True, roc=False)
+```
+![Precision-recall curve](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/pr_curve_simple.png)
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+**Note**: Matplotlib and plotly are optional dependencies, which are not installed by default.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Use-Case: Preprocess pandas DataFrames
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+```python
+import pandas as pd
+from catabra_lib import preprocessing
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+df = pd.DataFrame(
+    data=dict(
+        name=["Doe, J.", "Smith, A.", "Miller, M.", "Baker, S."],
+        dob=pd.to_datetime(["1937-04-12", "1952-09-18", "1996-12-03", "1940-05-05"]),
+        male=[False, True, True, False],
+        bmi=[21.7, 28.5, 32.1, 24.0],
+        complaint=pd.Categorical(["chest pain", "fever", "chest pain", "headache"]),
+        length_of_stay=pd.to_timedelta([2.6, 4.7, 1.2, 0.3], unit="d")
+    )
+)
+df
+```
+![DataFrame](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/df.png)
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Min-max-scale numerical and timedelta columns, one-hot-encode categorical and boolean columns, pass-through datetime columns, and drop all other columns:
+```python
+preprocessing.NumCatTransformer(
+    num_transformer=preprocessing.MinMaxScaler(),
+    cat_transformer=preprocessing.OneHotEncoder(drop="if_binary"),
+    bool="cat",
+    obj="drop",
+    timedelta="[h]",
+    timestamp="passthrough"
+).fit_transform(df)
+```
+![Transformed DataFrame](https://raw.githubusercontent.com/risc-mi/catabra-lib/main/doc/figures/df_transformed.png)
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+**Note**: pandas is an optional dependency, which is not installed by default. If you are working with pandas DataFrames
+a lot, you might want to check out **[CaTabRa-pandas](https://github.com/risc-mi/catabra-pandas)**.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+## References
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+**If you use CaTabRa-lib in your research, we would appreciate citing the following conference paper:**
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+* A. Maletzky, S. Kaltenleithner, P. Moser and M. Giretzlehner.
+  *CaTabRa: Efficient Analysis and Predictive Modeling of Tabular Data*. In: I. Maglogiannis, L. Iliadis, J. MacIntyre
+  and M. Dominguez (eds), Artificial Intelligence Applications and Innovations (AIAI 2023). IFIP Advances in
+  Information and Communication Technology, vol 676, pp 57-68, 2023.
+  [DOI:10.1007/978-3-031-34107-6_5](https://doi.org/10.1007/978-3-031-34107-6_5)
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+  ```
+  @inproceedings{CaTabRa2023,
+    author = {Maletzky, Alexander and Kaltenleithner, Sophie and Moser, Philipp and Giretzlehner, Michael},
+    editor = {Maglogiannis, Ilias and Iliadis, Lazaros and MacIntyre, John and Dominguez, Manuel},
+    title = {{CaTabRa}: Efficient Analysis and Predictive Modeling of Tabular Data},
+    booktitle = {Artificial Intelligence Applications and Innovations},
+    year = {2023},
+    publisher = {Springer Nature Switzerland},
+    address = {Cham},
+    pages = {57--68},
+    isbn = {978-3-031-34107-6},
+    doi = {10.1007/978-3-031-34107-6_5}
+  }
+  ```
 
-## License
-For open source projects, say how it is licensed.
+## Contact
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+If you have any inquiries, please open a GitHub issue.
+
+## Acknowledgments
+
+This project is financed by research subsidies granted by the government of Upper Austria. RISC Software GmbH is Member
+of UAR (Upper Austrian Research) Innovation Network.

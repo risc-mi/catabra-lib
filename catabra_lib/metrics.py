@@ -105,7 +105,7 @@ class averageable(_OperatorBase):  # noqa
                     )
             else:
                 raise ValueError(
-                    'average has to be one of None, "micro", "macro", "weighted" or "samples",' ' but got "{}"'.format(
+                    'average has to be one of None, "micro", "macro", "weighted" or "samples", but got "{}"'.format(
                         average
                     )
                 )
