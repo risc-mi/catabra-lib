@@ -144,10 +144,10 @@ def test_recursive():
         pass
     else:
         assert False
-    
+
     # recursive definitions don't matter if the respective data types don't appear
     preprocessing.DTypeTransformer(cat="cat").fit(df)
-    
+
     trans = preprocessing.DTypeTransformer(
         num="bool", bool="datetime", datetime="cat", cat="timedelta", timedelta="obj", default="num"
     )

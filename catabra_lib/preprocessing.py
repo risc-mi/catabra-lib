@@ -227,7 +227,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
         * "obj": Treat numerical columns like columns with object data type, and apply the transformation specified by
             `obj`.
         * None or "default": Apply the default transformation, specified by `default`.
-        
+
     cat : str | BaseEstimator, optional
         The transformation to apply to categorical columns. Same options as for `num`.
     bool : str | BaseEstimator, optional
@@ -292,17 +292,17 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
     @property
     def timedelta_resolution(self) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
         return self._timedelta_resolution
-    
+
     @timedelta_resolution.setter
-    def timedelta_resolution(self, value: Union[str, "pandas.Timedelta", None]):    # noqa F821 # type: ignore
+    def timedelta_resolution(self, value: Union[str, "pandas.Timedelta", None]):  # noqa F821 # type: ignore
         self._timedelta_resolution = self._get_resolution(value)
 
     @property
     def datetime_resolution(self) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
         return self._datetime_resolution
-    
+
     @datetime_resolution.setter
-    def datetime_resolution(self, value: Union[str, "pandas.Timedelta", None]): # noqa F821 # type: ignore
+    def datetime_resolution(self, value: Union[str, "pandas.Timedelta", None]):  # noqa F821 # type: ignore
         self._datetime_resolution = self._get_resolution(value)
 
     def fit(self, X: "pandas.DataFrame", y=None) -> "DTypeTransformer":  # noqa F821 # type: ignore
@@ -371,7 +371,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
                     X_trans = X_trans_df
             all_df = all_df and isinstance(X_trans, self._pd.DataFrame)
             out.append(X_trans)
-        
+
         if all_df:
             # return DataFrame
             return self._pd.concat(out, axis=1, sort=False)
@@ -823,7 +823,10 @@ def binarizer(threshold: float = 0, **kwargs) -> DTypeTransformer:
 
 
 def binarize(
-    X: "pandas.DataFrame", threshold: float = 0, output: str = "default", **kwargs  # noqa F821 # type: ignore
+    X: "pandas.DataFrame",  # noqa F821 # type: ignore
+    threshold: float = 0,
+    output: str = "default",
+    **kwargs,
 ) -> Union["pandas.DataFrame", np.ndarray]:  # noqa F821 # type: ignore
     """Binarize numerical features in a pandas DataFrame, while keeping other features unchanged.
 
