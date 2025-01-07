@@ -19,7 +19,7 @@ classifiers = [
 python = "^3.6.1"
 scikit-learn = [
     {version = ">=0.23.0", python = "<3.9"},
-    {version = ">=1.2.0", python = ">=3.9"}
+    {version = ">=0.24.0", python = ">=3.9"}
 ]
 
 [tool.poetry.group.dev.dependencies]
