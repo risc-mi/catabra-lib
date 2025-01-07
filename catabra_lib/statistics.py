@@ -1,4 +1,4 @@
-#  Copyright (c) 2024. RISC Software GmbH.
+#  Copyright (c) 2025. RISC Software GmbH.
 #  All rights reserved.
 
 # DeLong-related code was copied and adapted from https://github.com/jiesihu/AUC_Delongtest__python
