@@ -1,0 +1,130 @@
+[tool.poetry]
+# https://python-poetry.org/docs/pyproject/
+name = "catabra-lib"
+version = "0.0.1"
+description = "CaTabRa-lib is a library with useful data-science-related functions and classes built atop scikit-learn"
+license = "Apache 2.0 with Commons Clause"
+authors = ["RISC Software GmbH"]
+readme = "README.md"
+repository = "https://github.com/risc-mi/catabra-lib"
+packages = [
+  { include = "catabra_lib" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+[tool.poetry.dependencies]
+# https://python-poetry.org/docs/dependency-specification/
+python = "^3.6.1"
+scikit-learn = [
+    {version = ">=0.23.0", python = "<3.9"},
+    {version = ">=0.24.0", python = ">=3.9"}
+]
+
+[tool.poetry.group.dev.dependencies]
+# https://python-poetry.org/docs/master/managing-dependencies/
+poethepoet = { version = ">=0.19.0", python = "^3.9" }
+black = { version = "^23.3.0", extras = ["jupyter"], python = "^3.9" }
+ruff = { version = ">=0.6.4", python = "^3.11" }
+isort = { version = "^5.12.0", python = "^3.9" }
+pytest = { version = "^7.2.1", python = "^3.9" }
+pytest-clarity = { version = "^1.0.1", python = "^3.9" }
+pytest-cov = { version = "4.0.0", python = "^3.9" }
+pytest-xdist = { version = "^3.2.0", python = "^3.9" }
+liccheck = { version = "^0.9.2", python = "^3.9" }
+setuptools = { version = ">=59.5.0", python = "^3.9" }
+pandas = { version = "^2.2.3", python = "^3.9" }
+numpy = { version = "^1.26.4", python = "^3.9" }
+
+[tool.poetry_bumpversion.file."catabra_lib/__version__.py"]
+
+[tool.poe.tasks]
+# https://github.com/nat-n/poethepoet
+_format = "black ."
+_sort_imports = "isort ."
+_lint = "ruff check --fix ."
+
+_check_format = "black --check ."
+_check_sort_imports = "isort --check ."
+_check_lint = "ruff check ."
+
+precommit = ["_format", "_sort_imports", "_lint"]
+check = ["_check_format", "_check_sort_imports", "_check_lint"]
+test = "pytest"
+
+[tool.black]
+# https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html#configuration-via-a-file
+line-length = 120
+
+[tool.isort]
+# https://pycqa.github.io/isort/docs/configuration/config_files
+profile = "black"
+
+[tool.pytest.ini_options]
+# https://docs.pytest.org/en/7.1.x/reference/customize.html
+addopts = "--color=yes --doctest-modules  -ra --cov --cov-report=html --cov-report term --cov-report xml:coverage.xml --exitfirst --failed-first --strict-config --strict-markers --verbosity=2 --junitxml=python-junit.xml"
+xfail_strict = true
+pythonpath = ["catabra_lib"]
+testpaths = ["catabra_lib", "tests"]
+# ignore any of these paths
+norecursedirs = ["catabra_lib/plotting"]
+markers = [
+    "slow: marks tests as slow",
+    "allowed_to_fail: marks tests that can fail under certain conditions without it being an error",
+    "manual: marks tests that must be executed manually"
+]
+
+[tool.ruff]
+# https://github.com/charliermarsh/ruff
+fix = true
+line-length = 120
+src = ["catabra_lib", "tests"]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 120
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+
+[tool.liccheck]
+# see also: https://pypi.org/project/liccheck/
+# Authorized and unauthorized licenses in LOWER CASE
+authorized_licenses = [
+        "bsd",
+        "new bsd",
+        "bsd 3-clause",
+        "bsd license",
+        "isc license",
+        "isc license (iscl)",
+        "apache",
+        "apache 2.0",
+        "apache software",
+        "apache software license",
+        "apache license, version 2.0",
+        "gnu lgpl",
+        "historical permission notice and disclaimer (hpnd)",
+        "lgpl with exceptions or zpl",
+        "mozilla public license 2.0 (mpl 2.0)",
+        "mit",
+        "mit license",
+        "new bsd license",
+        "python software foundation license",
+        "python software foundation",
+        "simplified bsd",
+        "the unlicense (unlicense)",
+	]
+# as_regex = true -> e.g. '\bgpl'
+unauthorized_licenses = [
+	"gpl v3",
+	"gnu general public license v2 or later (gplv2+)",
+]
+level = "standard"  # alternatives: "cautious", "paranoid"
+requirement_txt_file = "./requirements.txt"
+reporting_txt_file = "./liccheck_reporting.txt" # by default is None
+
+[tool.liccheck.authorized_packages]
+# Python software license (see http://zesty.ca/python/uuid.README.txt)
+uuid = "1.30"
+
