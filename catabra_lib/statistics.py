@@ -633,15 +633,15 @@ def suggest_test(
 
     Notes
     -----
-    A statistical test is usually performed by find evidence _against_ the null hypothesis of the test, e.g., using the
-    t-test to show that two groups have _different_ mean values. The converse is not true, though: if a test does not
-    produce evidence against the null hypothesis, we cannot conclude that the null-hypothesis must be true -- only that
-    we have not found any evidence against it. This holds true even if the p-values are close to 1.
+    A statistical test is usually performed by finding evidence _against_ the null hypothesis of the test, e.g., using
+    the t-test to show that two groups have _different_ mean values. The converse is not true, though: if a test does
+    not produce evidence against the null hypothesis, we cannot conclude that the null-hypothesis must be true -- only
+    that we have not found any evidence against it. This holds true even if the p-values are close to 1.
     More concisely: null hypothesis true ==> (relatively) large p-value. Note the implication, not equivalence!
 
     One common assumption of most statistical tests is that all observations in a group are independent, i.e., all are
-    drawn independently from the same underlying distribution (i.i.d. assumption). Whether is property holds true also
-    _between_ groups can be controlled with parameter `paired`.
+    drawn independently from the same underlying distribution (i.i.d. assumption). Whether this property holds true
+    also _between_ groups can be controlled with parameter `paired`.
 
     There are many resources for finding the right statistical test on the internet, e.g., _[1].
 

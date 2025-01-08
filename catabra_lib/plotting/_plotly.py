@@ -156,7 +156,7 @@ def training_history(x, ys, title: Optional[str] = "Training History", legend=No
         assert text is None or len(text) == len(x)
         for y, lbl in zip(ys, legend):
             fig.add_trace(go.Scatter(x=x, y=y, name=lbl, mode="lines+markers", text=text))
-        maxes = [y.abs().max() for y in ys]
+        maxes = [np.abs(y).max() for y in ys]
         maxes = [np.log10(m) for m in maxes if m > 0]
         if min(maxes) + 1 < max(maxes):
             # logarithmic scale

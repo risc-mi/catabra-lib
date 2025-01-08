@@ -132,7 +132,7 @@ def training_history(
             ax.plot(x, y, label=lbl, marker=".")
         if any(lbl is not None for lbl in legend):
             ax.legend(loc="best")
-        maxes = [y.abs().max() for y in ys]
+        maxes = [np.abs(y).max() for y in ys]
         maxes = [np.log10(m) for m in maxes if m > 0]
         if min(maxes) + 1 < max(maxes):
             # logarithmic scale
