@@ -1330,6 +1330,7 @@ def confusion_matrix(
         Predictions, array-like with the same shape as `y_true`.
     multilabel : str | bool, default="auto"
         Whether to return a binary/multiclass confusion matrix, or a multiplabel confusion matrix:
+
         * True: Return a multilabel confusion matrix, even if the input is binary/multiclass. Multiclass data will be
             treated as if binarized under a one-vs-rest transformation.
         * False: Return a binary/multiclass confusion matrix. Raises a ValueError if the input is multilabel.
