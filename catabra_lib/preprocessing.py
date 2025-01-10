@@ -454,7 +454,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
             if isinstance(trans, skl_preprocessing.KBinsDiscretizer):
                 if (
                     trans.encode in ("onehot", "onehot-dense")
-                    and self.num_transformer_.n_bins_.sum() == X.shape[1]
+                    and trans.n_bins_.sum() == X.shape[1]
                     and len(trans.n_bins_) == len(cols)
                 ):
                     columns = [f"{col}_{b}" for col, n in zip(cols, trans.n_bins_) for b in range(n)]

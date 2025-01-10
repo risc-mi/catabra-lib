@@ -686,7 +686,7 @@ def beeswarm(
 
         m = cm.ScalarMappable(cmap=cmap)
         m.set_array([0, 1])
-        cb = plt.colorbar(m, ticks=np.linspace(0, 1, len(color_ticks)), aspect=1000)
+        cb = plt.colorbar(m, ax=ax, ticks=np.linspace(0, 1, len(color_ticks)), aspect=1000)
         cb.set_ticklabels(color_ticks)
         if color_name is not None:
             cb.set_label(color_name, size=12, labelpad=0)
