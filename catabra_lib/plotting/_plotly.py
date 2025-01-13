@@ -842,11 +842,6 @@ def beeswarm(
     .. [1] https://github.com/slundberg/shap/
     """
 
-    try:
-        import pandas as pd
-    except ImportError:
-        raise ValueError("")
-
     assert all(values[c].dtype.kind in "ifb" for c in values.columns)
     n_samples, n_features = values.shape
     row_height = 0.4
@@ -911,16 +906,16 @@ def beeswarm(
             c = c_gray
             i = i_gray
         else:
-            x = pd.concat([x_gray, x_colored])
+            x = np.concatenate([x_gray, x_colored])
             y = np.concatenate([y_gray, y_colored])
             c = c_gray + c_colored
             i = np.concatenate([i_gray, colored[5]])
 
         if col_orig is None:
-            text = ["ID={}<br>X={}".format(x.index[j], x.iloc[j]) for j in range(len(x))]
+            text = ["ID={}<br>X={}".format(values.index[i[j]], x[j]) for j in range(len(x))]
         else:
             text = [
-                "ID={}<br>X={}<br>{}={}".format(x.index[j], x.iloc[j], color_name, col_orig.iloc[i[j]])
+                "ID={}<br>X={}<br>{}={}".format(values.index[i[j]], x[j], color_name, col_orig.iloc[i[j]])
                 for j in range(len(x))
             ]
 
