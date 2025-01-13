@@ -132,7 +132,7 @@ def training_history(
             ax.plot(x, y, label=lbl, marker=".")
         if any(lbl is not None for lbl in legend):
             ax.legend(loc="best")
-        maxes = [y.abs().max() for y in ys]
+        maxes = [np.abs(y).max() for y in ys]
         maxes = [np.log10(m) for m in maxes if m > 0]
         if min(maxes) + 1 < max(maxes):
             # logarithmic scale
@@ -686,7 +686,7 @@ def beeswarm(
 
         m = cm.ScalarMappable(cmap=cmap)
         m.set_array([0, 1])
-        cb = plt.colorbar(m, ticks=np.linspace(0, 1, len(color_ticks)), aspect=1000)
+        cb = plt.colorbar(m, ax=ax, ticks=np.linspace(0, 1, len(color_ticks)), aspect=1000)
         cb.set_ticklabels(color_ticks)
         if color_name is not None:
             cb.set_label(color_name, size=12, labelpad=0)

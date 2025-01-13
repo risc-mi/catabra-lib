@@ -210,6 +210,7 @@ class StratifiedGroupKFold(_BaseKFold):
     """Copied and adapted from sklearn version 1.0.2 [1], because older versions do not provide this very useful class.
 
     Changelist:
+
     - Remove warning if some class has fewer than `n_splits` instances.
     - Do not throw error if all classes have fewer than `n_splits` instances.
     - Add method "brute_force".
@@ -223,20 +224,16 @@ class StratifiedGroupKFold(_BaseKFold):
     shuffle : bool, default=False
         Whether to shuffle samples before splitting.
     random_state : int or RandomState, optional
-        Controls the randomness of the training and testing indices produced.
-        Pass an int for reproducible output across multiple function calls.
+        Controls the randomness of the training and testing indices produced. Pass an int for reproducible output
+        across multiple function calls.
     method : str, default="automatic"
-        Resampling method to use. Can be "automatic", "exact" and "brute_force".
-        If there are many small groups, "brute_force" tends to give reasonable
-        results and is significantly faster than "exact". Otherwise, if there
-        are only few large groups, method "exact" might be preferable.
-        "automatic" tries to infer the optimal method based on the number of
-        groups.
-        Note that "brute_force" is only possible if `shuffle` is set to True.
+        Resampling method to use. Can be "automatic", "exact" and "brute_force". If there are many small groups,
+        "brute_force" tends to give reasonable results and is significantly faster than "exact". Otherwise, if there
+        are only few large groups, method "exact" might be preferable. "automatic" tries to infer the optimal method
+        based on the number of groups. Note that "brute_force" is only possible if `shuffle` is set to True.
     n_iter : int, optional
-        Number of brute-force iterations. The larger the number, the more
-        splits are tried, and hence the better the results get. If None, the
-        number of iterations is determined automatically.
+        Number of brute-force iterations. The larger the number, the more splits are tried, and hence the better the
+        results get. If None, the number of iterations is determined automatically.
 
     References
     ----------

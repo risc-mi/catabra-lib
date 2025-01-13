@@ -10,6 +10,11 @@ from sklearn import preprocessing as skl_preprocessing
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.utils.validation import check_is_fitted
 
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
 _SKL_MAJOR, _SKL_MINOR = [int(i) for i in skl_version.split(".", maxsplit=2)[:2]]
 
 
@@ -100,7 +105,7 @@ class OneHotEncoder(skl_preprocessing.OneHotEncoder):
     Parameters
     ----------
     drop_na : bool, default=False
-        Drop NaN categories. If False, the behavior is identical to `sklearn.preprocessing.OneHotEncode`.
+        Drop NaN categories. If False, the behavior is identical to `sklearn.preprocessing.OneHotEncoder`.
     drop : iterable, optional
         Categories to drop. If `drop_na` is True, this parameter must be None.
     handle_unknown : str, optional
@@ -211,6 +216,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
     num : str | BaseEstimator, optional
         The transformation to apply to numerical columns, or "passthrough", "drop", "num", "cat", "bool", "timedelta",
         "datetime", "obj" or None/"default":
+
         * BaseEstimator: Apply the BaseEstimator to all columns with numerical data type. The BaseEstimator must
             implement `fit()` and `transform()`. Class instances are cloned before being fit to data, to ensure that
             the given instances are left unchanged.
@@ -234,7 +240,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
         The transformation to apply to boolean columns. Same options as for `num`.
     timedelta : str | BaseEstimator, optional
         The transformation to apply to timedelta columns. Same options as for `num`.
-    timestamp : str | BaseEstimator, optional
+    datetime : str | BaseEstimator, optional
         The transformation to apply to datetime columns. Same options as for `num`.
     obj : str | BaseEstimator, optional
         The transformation to apply to columns with object data type. Same options as for `num`.
@@ -258,7 +264,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
     This preprocessing transformation is only applicable to pandas DataFrames.
 
     If the transformation specification is recursive, `fit()` raises a ValueError. Recursive specifications arise
-    when some data type A shall be treated like B, B shall be treated like C, C shall be treated like ... A.
+    when some data type A shall be treated like B, B shall be treated like C, C shall be treated like ... like A.
     """
 
     def __init__(
@@ -273,12 +279,9 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
         timedelta_resolution: Union[str, "pandas.Timedelta", None] = None,  # noqa F821 # type: ignore
         datetime_resolution: Union[str, "pandas.Timedelta", None] = None,  # noqa F821 # type: ignore
     ):
-        try:
-            import pandas as pd
-        except ImportError:
+        if pd is None:
             raise ValueError("Class DTypeTransformer can only be instantiated if pandas is installed.")
 
-        self._pd = pd
         self.num = num
         self.cat = cat
         self.bool = bool
@@ -359,7 +362,6 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
         X, _ = self._convert_temporal(X)
 
         out = []
-        all_df = True
         for _, trans, cols in self.transformers_:
             if trans is None:
                 # passthrough
@@ -369,16 +371,9 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
                 X_trans, X_trans_df = self._postproc(X_trans, trans, cols, X.index)
                 if X_trans_df is not None:
                     X_trans = X_trans_df
-            all_df = all_df and isinstance(X_trans, self._pd.DataFrame)
             out.append(X_trans)
 
-        if all_df:
-            # return DataFrame
-            return self._pd.concat(out, axis=1, sort=False)
-        else:
-            # return array
-            arrs = [X_trans.values if isinstance(X_trans, self._pd.DataFrame) else X_trans for X_trans in out]
-            return np.hstack(arrs)
+        return self._combine_results(out)
 
     def set_output(self, *args, **kwargs):
         # like ColumnTransformer, we set the output of both fitted and unfitted transformers
@@ -444,7 +439,7 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
                     if not copied:
                         df = df.copy()
                         copied = True
-                    df[c] = (df[c] - self._pd.Timestamp(0)) / self._datetime_resolution
+                    df[c] = (df[c] - pd.Timestamp(0)) / self._datetime_resolution
 
         return df, copied
 
@@ -452,14 +447,14 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
         df = None
         if hasattr(X, "toarray"):
             X = X.toarray()
-        if isinstance(X, self._pd.DataFrame):
+        if isinstance(X, pd.DataFrame):
             assert (X.index == index).all()
             df = X
         else:
             if isinstance(trans, skl_preprocessing.KBinsDiscretizer):
                 if (
                     trans.encode in ("onehot", "onehot-dense")
-                    and self.num_transformer_.n_bins_.sum() == X.shape[1]
+                    and trans.n_bins_.sum() == X.shape[1]
                     and len(trans.n_bins_) == len(cols)
                 ):
                     columns = [f"{col}_{b}" for col, n in zip(cols, trans.n_bins_) for b in range(n)]
@@ -488,25 +483,35 @@ class DTypeTransformer(BaseEstimator, TransformerMixin):
                 columns = cols
 
             if len(columns) == X.shape[1]:
-                df = self._pd.DataFrame(index=index, columns=columns, data=X)
+                df = pd.DataFrame(index=index, columns=columns, data=X)
 
         return X, df
+
+    @classmethod
+    def _combine_results(cls, outputs):
+        if all(isinstance(x, pd.DataFrame) for x in outputs):
+            # return DataFrame
+            return pd.concat(outputs, axis=1, sort=False)
+        else:
+            # return array
+            arrs = [x.values if isinstance(x, pd.DataFrame) else x for x in outputs]
+            return np.hstack(arrs)
 
     def _get_resolution(self, spec) -> Optional["pandas.Timedelta"]:  # noqa F821 # type: ignore
         if isinstance(spec, str):
             if spec in ("ns", "us", "ms", "s", "m", "h", "d", "w"):
-                return self._pd.Timedelta(1, unit=spec)
+                return pd.Timedelta(1, unit=spec)
             elif spec in ("y", "Y"):
-                return self._pd.Timedelta(365.2525, unit="d")
+                return pd.Timedelta(365.2525, unit="d")
             elif len(spec) > 1 and spec[-1] in ("y", "Y"):
                 try:
                     y = float(spec[:-1])
                 except ValueError:
-                    return self._pd.to_timedelta(spec)
+                    return pd.to_timedelta(spec)
                 else:
-                    return self._pd.Timedelta(y * 365.2525, unit="d")
+                    return pd.Timedelta(y * 365.2525, unit="d")
             else:
-                return self._pd.to_timedelta(spec)
+                return pd.to_timedelta(spec)
         return spec
 
 
