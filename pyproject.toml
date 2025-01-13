@@ -1,7 +1,7 @@
 [tool.poetry]
 # https://python-poetry.org/docs/pyproject/
 name = "catabra-lib"
-version = "0.0.2"
+version = "0.0.3"
 description = "CaTabRa-lib is a library with useful data-science-related functions and classes built atop scikit-learn"
 license = "Apache 2.0 with Commons Clause"
 authors = ["RISC Software GmbH"]
